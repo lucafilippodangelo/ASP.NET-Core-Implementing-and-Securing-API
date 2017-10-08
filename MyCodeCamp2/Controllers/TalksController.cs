@@ -42,6 +42,8 @@ namespace MyCodeCamp2.Controllers
             return Ok(_mapper.Map<IEnumerable<TalkModel>>(talks));
         }
 
+        //LD I'm adding a call to an "ActionFilterAttribute" -> just for demo //LD STEP004
+        [TimerAction]
         [HttpGet("{id}", Name = "GetTalk")]
         public IActionResult Get(string moniker, int speakerId, int id)
         {
