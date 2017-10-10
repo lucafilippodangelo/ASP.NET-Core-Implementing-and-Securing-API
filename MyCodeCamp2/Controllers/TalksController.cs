@@ -42,10 +42,38 @@ namespace MyCodeCamp2.Controllers
             return Ok(_mapper.Map<IEnumerable<TalkModel>>(talks));
         }
 
+        //LD STEP X001
+        [HttpGet("GetCacheFromScratch/{id}", Name = "GetCacheFromScratch")] //LD called by: https://localhost:44342/api/camps/ATL2016/speakers/1/talks/GetCacheFromScratch/1/
+        public IActionResult GetCacheFromScratch(string moniker, int speakerId, int id)
+        {
+            string cacheKey = "itemOfLucaCached";
+            Talk itemOfLucaCached = null;
+
+            //LD this is an option how to retrieve value from cache, but the below one is convenient in "if" statements.
+            //Talk sss= _cache.Get(cacheKey) as Talk;
+
+            if (!_cache.TryGetValue(cacheKey, out itemOfLucaCached)) //LD TryGet returns true if the cache entry was found and store in "itemOfLucaCached" the value.
+            {
+                itemOfLucaCached = _repo.GetTalk(id);
+                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromSeconds(3));
+                //cacheEntryOptions.RegisterPostEvictionCallback(FillCacheAgain, this);
+
+                _cache.Set(cacheKey, itemOfLucaCached, cacheEntryOptions);
+            }
+
+            return Ok(_mapper.Map<TalkModel>(itemOfLucaCached));
+        }
+
+        private void FillCacheAgain(object key, object value, EvictionReason reason, object state)
+        {
+            //_logger.LogInformation(LogEventIds.LoadHomepage, "Cache was cleared: reason " + reason.ToString());
+        }
+
         //LD I'm adding a call to an "ActionFilterAttribute" -> just for demo //LD STEP004
         [TimerAction]
         [HttpGet("{id}", Name = "GetTalk")]
         public IActionResult Get(string moniker, int speakerId, int id)
+
         {
             //LD STEP50
             if (Request.Headers.ContainsKey("If-None-Match"))
