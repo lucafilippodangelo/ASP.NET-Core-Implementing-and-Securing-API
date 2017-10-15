@@ -66,6 +66,13 @@ namespace MyCodeCamp2
             //LD STEP51
             services.AddMemoryCache();
 
+            //LD STEPdist1
+            services.AddDistributedRedisCache(options =>
+            {
+                options.Configuration = "localhost";
+                options.InstanceName = "ThisWebsite";
+            });
+
             //LD STEP19
             services.AddIdentity<CampUser, IdentityRole>().AddEntityFrameworkStores<CampContext>();
 

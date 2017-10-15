@@ -12,6 +12,7 @@ using MyCodeCamp.Models;
 using MyCodeCamp2.Filters;
 using MyCodeCamp2.Data;
 using MyCodeCamp2.Entities;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace MyCodeCamp2.Controllers
 {
@@ -23,28 +24,49 @@ namespace MyCodeCamp2.Controllers
         private IMapper _mapper;
         private ICampRepository _repo;
         private IMemoryCache _cache; //LD STEP52
+        private IDistributedCache _distributedCache; //LD STEPdist2
 
-        public TalksController(ICampRepository repo, ILogger<TalksController> logger, IMapper mapper, IMemoryCache cache)
+        public TalksController(ICampRepository repo, 
+                               ILogger<TalksController> logger, 
+                               IMapper mapper, 
+                               IMemoryCache cache,
+                               IDistributedCache distcache) //LD STEPdist3 
         {
             _repo = repo;
             _logger = logger;
             _mapper = mapper;
             _cache = cache;
+            _distributedCache = distcache; //LD STEPdist3
         }
 
-        [HttpGet]
-        public IActionResult Get(string moniker, int speakerId)
-        {
-            var talks = _repo.GetTalks(speakerId);
 
-            if (talks.Any(t => t.Speaker.Camp.Moniker != moniker)) return BadRequest("Invalid talks for the speaker selected");
+        #region InMemory and Distribuited Cache tests
 
-            return Ok(_mapper.Map<IEnumerable<TalkModel>>(talks));
-        }
-
-        //LD STEP X001
+        //LD STEP X001 (InMemoryCache)
         [HttpGet("GetCacheFromScratch/{id}", Name = "GetCacheFromScratch")] //LD called by: https://localhost:44342/api/camps/ATL2016/speakers/1/talks/GetCacheFromScratch/1/
         public IActionResult GetCacheFromScratch(string moniker, int speakerId, int id)
+        {
+            string cacheKey = "itemOfLucaCached";
+            Talk itemOfLucaCached = null;
+
+            //LD this is an option how to retrieve value from cache, but the below one is convenient in "if" statements.
+            //Talk sss= _cache.Get(cacheKey) as Talk;
+
+            if (!_cache.TryGetValue(cacheKey, out itemOfLucaCached)) //LD TryGet returns true if the cache entry was found and store in "itemOfLucaCached" the value.
+            {
+                itemOfLucaCached = _repo.GetTalk(id);
+                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromSeconds(3));
+                //cacheEntryOptions.RegisterPostEvictionCallback(FillCacheAgain, this);
+
+                _cache.Set(cacheKey, itemOfLucaCached, cacheEntryOptions);
+            }
+
+            return Ok(_mapper.Map<TalkModel>(itemOfLucaCached));
+        }
+
+        //LD STEP X002
+        [HttpGet("GetDistribuitedCacheFromScratch/{id}", Name = "GetDistribuitedCacheFromScratch")] //LD called by: https://localhost:44342/api/camps/ATL2016/speakers/1/talks/GetDistribuitedCacheFromScratch/1/
+        public IActionResult GetDistribuitedCacheFromScratch(string moniker, int speakerId, int id)
         {
             string cacheKey = "itemOfLucaCached";
             Talk itemOfLucaCached = null;
@@ -67,6 +89,21 @@ namespace MyCodeCamp2.Controllers
         private void FillCacheAgain(object key, object value, EvictionReason reason, object state)
         {
             //_logger.LogInformation(LogEventIds.LoadHomepage, "Cache was cleared: reason " + reason.ToString());
+        }
+
+        #endregion
+
+
+        #region CRUD operations with cache (from course)
+
+        [HttpGet]
+        public IActionResult Get(string moniker, int speakerId)
+        {
+            var talks = _repo.GetTalks(speakerId);
+
+            if (talks.Any(t => t.Speaker.Camp.Moniker != moniker)) return BadRequest("Invalid talks for the speaker selected");
+
+            return Ok(_mapper.Map<IEnumerable<TalkModel>>(talks));
         }
 
         //LD I'm adding a call to an "ActionFilterAttribute" -> just for demo //LD STEP004
@@ -208,6 +245,9 @@ namespace MyCodeCamp2.Controllers
 
             return BadRequest("Failed to delete talk");
         }
+
+
+        #endregion 
 
     }
 }
