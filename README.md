@@ -416,3 +416,176 @@ then use it in the ACTION
       
 is possible see the logging in the OUTPUT WINDOW, by selecting DEBUG in the "Show Output Option" combo
 
+### Entities and Models
+
+**Adding a View Model**
+
+- he just create all the DTO, so a flat model to call, in order to don't send to the user informations tha we don't want
+
+**Using MODEL MAPPING AUTOMAPPER**
+
+- install AUTOMAPPER  -> "automapper.extensions.microsoft.dependencyinjection"
+  - close and reopen visual studio, if i'm not able to import libreries
+      
+      ```
+      //LD STEP3 (I used this label in more points of configuration, search more times)      
+      ```
+      
+then add automapper to the controller 
+
+      ```
+      //LD STEP3
+      ```
+      
+then create a new "CampModel" based on the "camps" data. NOTE THAT is not an "IEnumerable"
+
+      ```
+      return Ok(_mapper.Map<CampModel>(camps));
+      ```
+      
+then add a class than inherit from "profile" and do the actual mapping 
+
+      ```
+      CampMappingProfile.cs
+      ```
+      
+with AUTOMAPPER is possible map a related information of the main entity(with cardinality 1to1). In this case to get the "Location" of a "Camp" we are adding the prefix "Location"
+
+      //LD STEP5
+
+- in AUTO MAPPER PROFILE, I can chose by FLUENT API to map a specific field name to another one, so it's not mandatory that the FIELD NAMES HAD TO MATCH 100%
+
+      //LD STEP6
+      CreateMap<Camp, CampModel>()
+      .ForMember(c => c.StartDate,
+      opt => opt.MapFrom(camp => camp.EventDate)) 
+
+**mapping URLs**
+fon an entity, instead of in ID, we want return an unique URL that represent that specific entity.
+
+      //LD STEP777  (used many times) 
+
++ we could create an URL in the controller action like in //LDSTEP101, but we want do that by MAPPER, the solutionwith this mapper or with other is use an URLRESOLVER class.
+
+      //LD STEP888 (used many times) 
+
+set a BASE CONTROLLER in order to get "OnActionExecuting" the URL
+
+- the BASE CONTROLLER is useful to centralize any logic we reuse.
+
+add dependency injection 
+
+      //LD STEP888
+
+so now the URL is RETURNED as a field of the view model, to test it call by POSTMAN:
+
+      by ID -> http://localhost:8088/api/camps/getspecific/5
+      by a FIELD -> http://localhost:8088/api/camps/getspecificmoniker/CAZZO moniker
+
+**using MAPPING IN POST**
+
+then in sequence
+
+- map from "CampModel" to "Camp"
+
+- then persist the "camp"
+
+- then return to the user a mapping from "Cam"
+
+command: 
+
+      http://localhost:8088/api/camps/postmapper
+
+** using MODEL STATE and VALIDATION **
+
++ we are adding a check, see if the "ViewModel" passed in in the command POST is VALID
+
+      //LD STEP9991
+      if (!ModelState.IsValid) return BadRequest(ModelState); 
+
+** implementation of PUT **
+
+      //LD STEP9992
+
+### Associations in API 
+
+Data is related, sometiome the user like dig on data relations.
+We are creating an ASSOCIATION CONTROLLER for "Camps" called "Speakers".
+In this "Speakers" controller, starting from a specific "Camp" we will query for the list of speahers associated or for a specific speaker.
+
+      api/camps/campName/speakers
+      api/camps/campName/speakers/speakerName
+
+
+- here we define the ROUTING for all the actions of the controller 
+
+        //LD STEP7
+        [Route("api/camps/{moniker}/speakers")]
+
+- I do those calls 
+
+      http://localhost:8088/api/camps/ATL2016/speakers
+      http://localhost:8088/api/camps/ATL2016/speakers/1
+
+- then I have to update the "CampMappingProfile.cs" in order to use the MAPPER
+
+      //LD STEP72
+
+- then I have to add a "SpeakerUrlResolver" in order to get the proper URL
+
+      //LD STEP73
+
+- **implementing POST of an INNER ASSOCIATION**
+
+here we pass the "SpeakerModel" information and the specific "moniker" for who we want save.
+
+then in sequence
+
+      - we get the specific camp record by searching by moniker
+      - after we map the "SpeakerModel" to "Speaker" entity
+      - then we assign the "Camp" entity to the "Speaker" entity
+
+      //LD STEP74
+
+this is the postman call
+
+      http://localhost:8088/api/camps/ATL2016/speakers/
+
+this is the content of the call
+
+    "name": "Luca D'Angelo",
+    "companyName": "alivi corporation",
+    "phoneNumber": "555-1212",
+    "websiteUrl": "http://wildermuth.com",
+    "twitterName": "shawnwildermuth",
+    "gitHubName": "shawnwildermuth",
+    "bio": "luca is a speaker for ATL2016",
+    "headShotUrl": 
+     "http://wilderminds.com/images/minds/shawnwildermuth.jpg"
+
+
+**FILTER** filters are ways to interrupt direct call to actions. Then appy some code, check, conditions
+
+**adding VALIDATION, ActionFilterAttribute**
+
+we are adding validation to "SpeakerModel.cs", the action to verify if the MODEL IS VALID is repeated in any controller, so we are going to use a common
+
+      //LD STEP8
+
+so by this code, if the model is not valid the action is not executed at all
+
+to USE THE FILTER we just need to add it in the controller or in the specific action if we don't want use it for all the actions.
+
+      //LD STEP9
+
+he shows as well how to use QUERY STRINGS, but is the same approach of the previous training.
+
+- adding the ** Talk Association **
+below an example of request
+
+      http://localhost:8088/api/camps/ATL2016/speakers/1/talks
+
+- after he show how to use QUERY STRING in the speaker controller, we are able to specify in url when or not load "talks"
+
+      //LD STEP10
+      public IActionResult Get(string moniker, bool includeTalks = false)
