@@ -128,7 +128,7 @@ the purpose of the above method is to handle the web requestes
 
       //LD STEP0
       
-### READING DATA - API basics
+### Reading Data
 
 Rules:
 - URI should point to NOUNS
@@ -256,3 +256,141 @@ public class Startup
         }
     }
 ```
+
+### DB Seeding, Controller Setup, CRUD operations
+
+**Reading Data**
+
+http postman call example:
+    ```
+    http://localhost:8088/api/camps/ATL2016/speakers
+    ```
+
+- implementation of the first controller 
+     ``` 
+     //LD STEP1
+     ```
+     
+- GET SPECIFIC INSTANCE and use QUERY STRING PARAMETER
+
+     ```
+     //LD STEP55 - the query string parameter is "includeSpeakers"
+
+     POSTMAN CALL
+     http://localhost:8088/api/camps/getspecific/5?includeSpeakers=true
+     ```
+     
+- avoid CYCLIC REFERENCES
+
+      //LD STEP88
+
+**Routing**
+
+- OLD WAY TO ROUTING, in a static way.
+      
+      ```
+      app.UseMvc(config =>
+      {
+        //config.MapRoute("MainAPIRoute", "api/{controller}/{action}");
+      });
+      ```
+      
+- NEW WAY, DEFINE ATTRIBUTES IN THE CONTROLLER
+    
+    ```
+    //LD STEP2
+    [HttpGet("api/cazzo")]
+    ```
+    
+**Database Seed**
+
+- update "Startup.cs" in order to add the reference to the class that has to SEED the database 
+
+      ```
+      //LD STEP55
+      ```
+      
+- then inside "Startup.cs" we have to update the "Configure" method, by updating the parameters:
+      
+      ```
+      //LD STEP66
+      ```
+      
+and call the method that receive the context and if the database is empty, then seed it
+
+      ```
+      //LD STEP77
+      ```
+      
+**Post and Model Binding**
+
+      ```
+      //LD STEP99
+      ```
+      
+in POSTMAN -> "BODY" I have to tick "raw" and then select "JSON", and in visual studio do this action
+
+      ```
+      public IActionResult Post([FromBody]Camp model)
+      ```
+      
+we specify [FromBody], the meaning is that we want that the parser will try to PARSE from the BODY OF THE REQUEST
+
++ now I want store a new record and then return back a LINK that point to that specific record. So I have to send a LINK TO THE GET ACTION.
+
+before I name the ROUTING to the GET ACTION
+
+      ```
+      //LD STEP100
+      ```
+      
+then I implement the code to store and return the link
+
+      ```
+      //LD STEP101
+
+      [HttpPost]
+        public async Task<IActionResult> PostAsync([FromBody]Camp model)
+        //public async Task<IActionResult> Post([FromBody]CampModel model)
+        {
+            try
+            {
+                _logger.LogInformation("Creating a new Code Camp");
+
+                //    var camp = _mapper.Map<Camp>(model);
+                //LD STEP101
+                _repo.Add(model);
+
+                if (await _repo.SaveAllAsync())
+                {
+                    var newUri = Url.Link("CampGet", new { id = model.Id });
+                    return Created(newUri, model);
+                }
+                else
+                {
+                    _logger.LogWarning("Could not save Camp to the database");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Threw exception while saving Camp: {ex}");
+            }
+        ```
+
+- in the HEADER tab  that I have in POSTMAN I will receive the new URL that point to my new object
+
+**Put**
+
+      ``` 
+      //LD STEP104
+      ```
+      
+I can call it by a PUT request like this 
+
+      ```
+      http://localhost:8088/api/camps/5
+      ```
+      
+**Delete**
+easly implemented. See code example in project.
+
