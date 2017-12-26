@@ -47,7 +47,7 @@ The exercise is based on an ASP.NET CORE MVC project pluralsight course. Main To
   - Cookie Authentication
     - UserManager
   - Token Authentication
-    - JWT Json Web Token
+    - JWT Json Web Token (creation of middleware)
     - CLAIM 
     - POLICY 
 
@@ -65,6 +65,12 @@ The exercise is based on an ASP.NET CORE MVC project pluralsight course. Main To
   - CONCURRENCY SETTINGS 
 
 **Useful Links**
+
+-(manage inheritance with EF) http://www.learnentityframeworkcore.com/inheritance/table-per-hierarchy
+      
+-(ssl handshake) https://support.microsoft.com/en-us/help/257591/description-of-the-secure-sockets-layer-ssl-handshake
+      
+-(ssl handshake) http://www.slashroot.in/understanding-ssl-handshake-protocol
 
 -(in memory caching) http://www.dotnetcurry.com/aspnet-mvc/1246/inmemory-caching-aspnet-mvc-6-core
 
@@ -503,7 +509,7 @@ command:
       //LD STEP9991
       if (!ModelState.IsValid) return BadRequest(ModelState); 
 
-** implementation of PUT **
+**implementation of PUT**
 
       //LD STEP9992
 
@@ -535,7 +541,7 @@ In this "Speakers" controller, starting from a specific "Camp" we will query for
 
       //LD STEP73
 
-- **implementing POST of an INNER ASSOCIATION**
+**implementing POST of an INNER ASSOCIATION**
 
 here we pass the "SpeakerModel" information and the specific "moniker" for who we want save.
 
@@ -589,3 +595,471 @@ below an example of request
 
       //LD STEP10
       public IActionResult Get(string moniker, bool includeTalks = false)
+
+### Functional API
+
+the meaning is that we can't do all by REST(resource based approach), sometime we need to reset a server, or clear cache... so we have tofind a way to organize this specific part of API.
+
+he create "OperationsController.cs" where we are simulating the reloading of the configuration bundle.
+
+      //LD STEP11
+
+we are using a specific verb available for "Options"
+
+      [HttpOptions("reloadConfig")]
+      
+### Securing APIs
+
+**SSL - secure socket layer**
+the comunication between client and server has to be secure. To face up to that we use SSL, is based on the concept of TRUST+ENCRIPTION between the two sides.
+
+slide useful for SSL -->
+[7-aspdotnetcore-implementing-securing-api-m7-slides.pdf](https://trello-attachments.s3.amazonaws.com/579776d92c5f0fd947aff4a8/58a2f698a47cf8c6e3a9969a/c8c0f5cb9b43e0a7bcf23fcccbfbd418/7-aspdotnetcore-implementing-securing-api-m7-slides.pdf) 
+
+- Secure in transit - **SYMMETRIC ENCRYPTION**, 
+  - here we encript, decript by same algorithm(AES)+key. the KEY is SHARED. the KEY is PRIVATE
+
+- Secure in transit - **ASYMMETRIC ENCRYPTION**
+  - here we keep secret the private key! If somebody still the public key can only encript data.
+  - entity "A" encript the data using a PUBLIC KEY supplied by entity "B". this KEY CAN ONLY ENCRIPT
+  - entity "B" use a never given PRIVATE KEY paired with the public, able to decript.
+
+- Secure in transit - **SSL HANDSHAKE**(use a combination of symmetric and asymmetric technique)
+  - 1 - entity "A" send a signal of "begin request"
+  - 2 - entity "B" reply with a "certificate"(to show that the part can be trusted). the "certificate" cointain a PUBLIC KEY.
+  - 3 - entity "A" use the public key to encript a NEW symmetric key, then return it. 
+  - 4 - since this moment the communication can be encripted. 
+
+DEMO - ** Supporting SSL **
+
+the below MIDDLEWARE is a FILTER, it manages secure SSL request coming in, if the request is not secure it is automatically managed as http PROTOCOL
+
+we have to set "Startup.cs"
+
+      //LD STEP12
+
+we have to enable SSL in the property of the prooject, and just use it as the first part of our http request.
+
+      manu project -> property -> debug -> enable SSL
+
+we can add the following code in "Startup.cs" to enable SSL JUST IN PRODUCTION
+
+                if (!_env.IsProduction())
+                {
+                    opt.SslPort = 44342; //LD same port we see in configuration
+                }
+
+STEP 2 - enable SSL request in POSTMAN and enable SSL in project by the properties settings.
+
+
+** Supporting CORS **
+
+CORS -> Cross Origin Resource Sharing
+- It is a mechanism that allows restricted resources (e.g. fonts) on a web page to be requested from another domain outside the domain from which the first resource was served. A web page may freely embed cross-origin images, stylesheets, scripts, iframes, and videos.
+
+we can enable CORS in our website in order to allow calls to API from specific path , or by specific header etc...
+
+let's see how to implement it! In "Startup.cs"
+
+            //LD STEP13
+            services.AddCors();
+
+and 
+
+            //LD STEP14
+             app.UseCors(cfg =>
+            {
+                cfg.AllowAnyHeader()
+                   .AllowAnyMethod()
+                   .WithOrigins("http://wildermuth.com");
+            });
+
+so any call coming from "http://wildermuth.com" is allowed to the API. But this is GLOBAL, if we want more granularity, we have to set some POLICY in "Startup.cs" -> "ConfigureServices"method.
+We have to comment //LD STEP13, and then add POLICY
+
+            //LD STEP15
+            services.AddCors(cfg =>
+            {
+                cfg.AddPolicy("Wildermuth", bldr =>
+                {
+                    bldr.AllowAnyHeader()
+                      .AllowAnyMethod()
+                      .WithOrigins("http://wildermuth.com");
+                });
+
+                cfg.AddPolicy("AnyGET", bldr =>
+                {
+                    bldr.AllowAnyHeader()
+                      .WithMethods("GET")
+                      .AllowAnyOrigin();
+                });
+            });
+
+then I have to specify the property in the controller
+
+      [EnableCors("AnyGET")] //LD STEP16
+
+we can act at ACTION LEVEL, and enable for that specific action
+
+      [EnableCors("Wildermuth")] //LD STEP17
+
+in this case, just people from "Wildermuth.com" can update 
+
+### API Authentication and Authorization**
+
+There are different types of Authentication we will be focused on "**Asp.Net Identity**", a simple way to store user **roles** and **claims**. It can be used for both **cookie** and **token** authentication
+
+**Asp.Net Identity**
+
+to use it:
+
+- install the NUGET "microsoft.aspnetcore.identity"
+
+note that we have "public class CampUser : IdentityUser"
+
+      //LD STEP18
+
+so we have to add the identity that inherit from "IdentityUser" in Startup.cs".
+
+      //LD STEP19 (used for methods "ConfigureServices" and "Configure")
+
+so this type is going to represent the type and the user in our system. Note that we specify the context that cointain the informations for our user.
+
+      //LD STEP19
+      services.AddIdentity<CampUser, IdentityRole>().AddEntityFrameworkStores<CampContext>();
+
+then in the controller we add "[Authorize]"
+
+          [Authorize] //LD STEP20
+
+with this in place, if I execute 
+  
+      "http://localhost:8088/api/camps/getspecificmoniker/ATL2016" 
+
+in a browser I can see that the framework try to redirect me to the "login" page, instead in postman I get error "404 not found"
+
+this is the url returned by the browser(I get https because I have SSL enabled)
+
+      https://localhost:44342/Account/Login?ReturnUrl=%2Fapi%2Fcamps%2Fgetspecificmoniker%2FATL2016
+
+in order to avoid a "404 Not Found" error when we are not Authorized to do something, we have to configurate "IdentityOptions"
+
+            //LD STEP21
+            services.Configure<IdentityOptions>(config =>
+            {
+                config.Cookies.ApplicationCookie.Events =
+                  new CookieAuthenticationEvents()
+                  {
+                      OnRedirectToLogin = (ctx) =>
+                    {
+                        if (ctx.Request.Path.StartsWithSegments("/api") && ctx.Response.StatusCode == 200)
+                        {
+                            ctx.Response.StatusCode = 401;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                      OnRedirectToAccessDenied = (ctx) =>
+                    {
+                        if (ctx.Request.Path.StartsWithSegments("/api") && ctx.Response.StatusCode == 200)
+                        {
+                            ctx.Response.StatusCode = 403;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                  };
+            });
+
+we set the "Events" when we use the cookie authentication, in order to change the common workflow of the framework
+
+      //LD STEP22
+
+we are overriding the action "OnRedirectToLogin"
+
+
+**Cookie Authentication** with Asp.Net Identity
+
+we start by creating an "AuthController", a controller dedicated to manage all the authentication requestes.
+
+      //LD STEP23
+      public class AuthController : Controller
+
+note that the controller get as parameter a " SignInManager<CampUser> signInMgr". 
+
+what we want do is let the user post "username" and "password" in order to login
+
+      //LD STEP24
+      [HttpPost("api/auth/login")] 
+
+once we are passing over the network sensitive data, we have to use **SSL**
+
+with the "false" in this row we explicitly set that we don't want persist the cookie in the browswer after it is closed
+
+      //LD STEP25
+      var result = await _signInMgr.PasswordSignInAsync(model.UserName, model.Password, false, false);
+
+when we do SIGNIN, THE FRAMEWORK AUTOMATICALLY DROPS A COOKIE IN THE CLIENT RESPONCE
+
+then we need to initialize the users in the database, using "CampIdentityInitializer"
+
+      //LD STEP26
+
+then set this context in "Startup.cs"
+
+      //LD STEP27 - context
+
+      //LD STEP28 - seed
+
+      //LD STEP29 - execute seed
+
+then we create an SSL POST call in postman
+
+      https://localhost:44342/api/auth/login
+
+with this data
+
+      {
+             "userName": "shawnwildermuth",
+             "password": "P@ssw0rd!"
+      }
+
+NOW A COOKIE WILL BE RETURNED, is enought have a look on the COOKIE TAB, I will find an object od type ".AspNetCore.Identity.Application"
+
+**Using Identity Information**
+
+we are adding the [Authorize] attribute to the actions "Post" and "Delete" of "SpeakerController.cs"
+
+      //LD STEP30
+
+now we add the "User" to the controller, by using the **UserManager**. We can't assign streight 
+
+      speaker.user = this.user
+
+because in this case we are assign a type user.principal to a speaker user. We need to grab the "IdentityUser" in this way
+
+      var campUser = await _serMgr.FindByNameAsync(this.User.Identity.Name);
+
+I used this label for the operation
+
+      //LD STEP31 (used 4 times)
+      
+Postman POST call example
+
+      https://localhost:44342/api/camps/ATL2016/speakers
+
+Postman POST body call example
+
+      {
+    "url": "https://localhost:44342/api/camps/ATL2016/speakers/4",
+    "name": "aliviSpeaker",
+    "companyName": "alivi corporation",
+    "phoneNumber": "555-1212",
+    "websiteUrl": "http://wildermuth.com",
+    "twitterName": "shawnwildermuth",
+    "gitHubName": "shawnwildermuth",
+    "bio": "luca is a speaker for ATL2016",
+    "headShotUrl": "http://wilderminds.com/images/minds/shawnwildermuth.jpg",
+    "talks": []
+   }
+      
+
+### Token Authentication**
+
+**JWT Json Web Token** - theory
+
+are self contained: credentials+claims+other informations
+
+STRUCTURE of a JWT:
+HEADER (encription algotithm + type es "JWT") +
+PAYLOAD (json that contain info the server may want: some numbers+some claims + some names) +
+
+the JWT is then ENCODED
+they encrypt each piece HEADER+PAYLOAD in "base64encode", separating it by "." and at the end they concatenate an "ENCRYPTED SIGNATURE". 
+
+the "ENCRIPTED SIGNATURE" is an HASH of the HEADER+PAYLOAD+ a SECRET signed by the server, that just the server know, and that the clien doesn't need to decript. The client if needed can access to the HEADER+PAYLOAD.
+
+
+**Generating JWT** - Demo 
+
+now we update "AuthController.cs" in order to jenerate a token when login
+
+      //LD STEP32
+
+to use JWT I need to install the nuget "System.IdentityModel.Tokens.Jwt"
+
+then we will CREATE CLAIM in order to insert them in the TOKEN
+
+      //LD STEP33 (there are a lot of comments in this method)
+
+to remember thet we SEED the CLAIM "superuser"
+
+      //LD STEP33BIS
+
+then just try to authenticate by POSTMAN
+
+      https://localhost:44342/api/auth/token
+
+and I will RECEIVE the TOKEN
+
+      {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaGF3bndpbGRlcm11dGgiLCJqdGkiOiJjNTU2MDI1ZC00ODYxLTQ2ZmItYjAzOC0wZmJjMzE0NWZmNDMiLCJnaXZlbl9uYW1lIjoiU2hhd24iLCJmYW1pbHlfbmFtZSI6IldpbGRlcm11dGgiLCJlbWFpbCI6InNoYXduQHdpbGRlcm11dGguY29tIiwiU3VwZXJVc2VyIjoiVHJ1ZSIsImV4cCI6MTUwMjU0MTA5NywiaXNzIjoid3d3Lmx1Y2FkYW5nZWxvLml0IiwiYXVkIjoid3d3Lmx1Y2FkYW5nZWxvLml0In0.I1CfYmIiWoOhWxI0q5zQZqQgOMRPrzDLPasHmGD5upU",
+    "expiration": "2017-08-12T12:31:37Z"}
+
+there is an interesting website to VERIFY TOKENS: https://jwt.io/
+
+now we set "AppSettings.json" to avoid to "hard code"
+
+     //LD STEP34
+ 
+**Create Middleware for JWT** - validate JWT to use it as security tokens 
+
+we need to set the "Configure" method of "startup.cs". (include as well: Microsoft.AspNetCore.Authentication.JwtBearer) we ask to the framework that if find the token then authenticate.
+
+      //LD STEP35
+
+FOR EXAMPLE we can VERIFY AUTHORIZATION. If we do a simple request like
+
+      https://localhost:44342/api/camps/getall
+
+we will get "401 Unhautorized", but if in the HEADER we specify the KEY-VALUE
+
+      Authorization - bearer+"active token string previously generated"
+
+the get request will be executed.
+
+
+**Authorizing with Claims**
+
+we have to add a specific POLICY to authorize specific users with specific claims to do specific actions.
+
+      //LD STEP36 (code to add in "startup.cs")
+
+      //LD STEP37 (code to add in an action controller)
+      [Authorize(Policy = "Superusers")] 
+      
+
+### Versioning API
+
+the pdf
+   
+      9-aspdotnetcore-implementing-securing-api-m9-slides.pdf
+
+that describe the way to let the customer specify the version of the api, by query index, of by header etc...
+
+
+**Adding Versioning** (setting)
+
+we have to add the package  "microsoft.aspnetcore.mvc.versioning"
+
+now in "startup.cs" we have to add the SERVICE "service.AddApiVersioning"
+
+      //LD STEP38
+
+this is useful to specify how VERSIONING IS HANDLED in our application.
+
+when we do like above, for any http request we have to specify the version, the default way is by query string
+
+       https://localhost:44342/api/auth/token?api-version=1.0
+
+so by just specifying 
+
+       //LD STEP38
+       services.AddApiVersioning
+
+in "startup.cs" is mandatory specify versioning in any http request. THE VERSION "1.0" is the default one, so this is valid in the situation we don't specify any version in "startup.cs"
+
+we can OVERRIDE the DEFAULT API VERSION
+
+      cfg.DefaultApiVersion = new ApiVersion(1, 1);
+
+by adding the below code we say that if in the request there is not specified any version, the framework will consider the default one
+
+      cfg.AssumeDefaultVersionWhenUnspecified = true;
+
+we can send back in the header the supported api versions
+
+      cfg.ReportApiVersions = true;
+
+for instance:
+  
+      request: "https://localhost:44342/api/auth/token"
+      part of the information in the returned header:  "api-supported-versions →1.1"
+
+
+**Using Versioning Attributes**
+
+we add the attribute in "SpeakerController.cs"
+
+      //LD STEP39
+      [ApiVersion("1.0")]
+      [ApiVersion("1.1")]
+
+so in this case all the requests for api 1.0 and 1.1 will be allowed
+
+- IF I TRY TO DO A REQUEST where is enabled "[Authorize]", REMEMBER TO INCLUDE A VALID TOKEN IN THE HEADER, is possible create a token with "https://localhost:44342/api/auth/token"
+in this case for this example we don'r use [Authorize] to go faster.
+
+I can specify version for a specific action by using
+
+      //LD STEP40
+      [MapToApiVersion("1.1")]
+
+until now we did a versioning of small changes by just versioning the actions with MapToApiVersion, but if we have bigger changes we have to use VERSIONED CONTROLLERS
+
+**Using Versioned Controllers**
+
+for this controller we INHERIT from the "SpeakersController". He created "Speakers2Controller"
+
+      //LD STEP41
+
+we use the same routing but different API version
+
+      [Route("api/camps/{moniker}/speakers")]
+      [ApiVersion("2.0")]
+
+then we OVERRIDE the method in //LD STEP40
+so I can version at controller level or at action level.
+ 
+**Versioning Payload**
+
+now I create the new model "Speaker2Model.cs", we inherit from "SpeakerModel" and just add a property.
+
+      //LD STEP42
+
+then we update the "CampMappingProfile.cs" with the mapping for the new model "Speaker2Model.cs"
+
+              CreateMap<Speaker, Speaker2Model>()
+              .IncludeBase<Speaker, SpeakerModel>()
+              .ForMember(s => s.BadgeName, opt => opt.ResolveUsing(s => $"{s.Name} (@{s.TwitterName})"));
+
+we are going to use it in the new controller "Speaker2Controller.cs" 
+
+      //LD STEP43
+
+WHAT I DID: we did inherit both controller and model, we did an api versioning of the controller and we update the "mapper". now I have a clean API VERSION 2.0
+
+**Customizing Versioning Methods** (Query Index or Header)
+
+what we do here is specify in our rest call the version of the API we want call 
+we are going to customize startup.cs in order to use the "**Header**" of the request to version the api we are going to call. The **query string** will not work anymore, will be ignored.
+
+this is the update to do in "Startup.cs"
+
+      //LD STEP44
+      var rdr = new HeaderApiVersionReader("ver"); 
+
+now the system will read the "ver" header valie that we will specify in the header. For example in the header we have to specify
+
+      ver - 2.0
+
+THIS "HeaderApiVersionReader" IS NOT WORKING FOR A QUESTION OF VERSIONING OF THE PACKAGE I THINK. 
+Anyway, by "Query Index Versioning" or by "Header Versioning" we are covering all the needs we have.
+
+
+**Use versioning Conventions**
+
+is possible specify in "Startup.cs" a configuration useful for avoid attributes for versioning in controllers. So we can specify in "Startup.cs" all the vesions per controller and actionis accepted for specific controller.
+
+      //LD STEP45
+      
