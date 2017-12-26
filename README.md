@@ -705,7 +705,7 @@ we can act at ACTION LEVEL, and enable for that specific action
 
 in this case, just people from "Wildermuth.com" can update 
 
-### API Authentication and Authorization**
+### API Authentication and Authorization
 
 There are different types of Authentication we will be focused on "**Asp.Net Identity**", a simple way to store user **roles** and **claims**. It can be used for both **cookie** and **token** authentication
 
@@ -864,7 +864,7 @@ Postman POST body call example
    }
       
 
-### Token Authentication**
+### Token Authentication
 
 **JWT Json Web Token** - theory
 
@@ -1063,3 +1063,284 @@ is possible specify in "Startup.cs" a configuration useful for avoid attributes 
 
       //LD STEP45
       
+
+### CACHE 
+
+**InMemoryCache** settings: 
+
+we have to add the MEMORY CACHE setting in "Startup.cs"
+
+       //LD STEP51
+       services.AddMemoryCache();
+
+then add the cache dependency injection to the controller
+
+      //LD STEP52
+
+we have to know the "MemoryCacheEntryOptions", where I have to specify when cache has to expire:
+
+  1 - Absolute expiration (the cache expire after a certain amount of time)
+  
+  2 - Sliding Expiration (the cache expire timeout is resetted any time the cache is used)
+  
+  3 - Cache Priority (we can define how important is the cache, so aspnet is able to manage the eviction of it) 
+  
+  4 - Post Eviction Delegate (called when the cache will be evicted from the memory)
+
+example;
+
+      //LD STEP X001
+
+**ROWVERSION** setting
+
+we used FLUENT API to store the rowversion and concurrency settings to the specific entity "TALKS"
+
+              //LD STEP48
+              builder.Entity<Talk>() 
+              .Property(c => c.RowVersion)
+              .ValueGeneratedOnAddOrUpdate()
+              .IsRequired() 
+              .IsConcurrencyToken();
+
+es. https://www.tektutorialshub.com/property-mappings-using-fluent-api/
+
+**DEFINITION**
+When a clientmake a request, the server attach in the responce an **ETag** describing the version of the data returned.
+Then if the client do the same request again the server can check the ETag, if this doesn't change, then the server return an empty body, because the client already have the latest data available in cache.
+
+**IMPLEMENTATION - ETag - GET**
+the **ETag** is an id number, we are going to use the **RowVersion**
+
+      //LD STEP46
+
+we attach this "ETag" the responce to the header and SET IN CACHE the new(just saved) ROWVERSION FOR THE SPECIFIC TALK ID
+
+      //LD STEP47
+
+this is the call, now we will be able to see the ETag in our responce HEADER 
+
+      https://localhost:44342/api/camps/ATL2016/speakers/1/talks/1
+
+now in POSTMAN I have to add "If-None-Match" with the ETag received in the responce header after the first get, in this case:
+
+      If-None-Match - AAAAAAAAB9Q=
+
+then we have to add the check in the controller
+
+            //LD STEP50
+            if (Request.Headers.ContainsKey("If-None-Match"))
+            {
+                var oldETag = Request.Headers["If-None-Match"].First();
+                if (_cache.Get($"Talk-{id}-{oldETag}") != null)
+                {
+                    return StatusCode((int)HttpStatusCode.NotModified);
+                }
+            }
+
+
+
+**IMPLEMENTATION - ETag - UPDATE/DELETE**
+
+now we have to update the PUT method of the "Talks.cs" controller, by doing this we are able to handle CONCURRENCY
+
+                //LD STEP53
+                if (Request.Headers.ContainsKey("If-Match"))
+                {
+                    var etag = Request.Headers["If-Match"].First();
+                    if (etag != Convert.ToBase64String(talk.RowVersion))
+                    {
+                        return StatusCode((int)HttpStatusCode.PreconditionFailed);
+                    }
+                }
+
+I UPDATE THE ROWVERSION IN CACHE
+
+      //LD STEP54
+
+now if I do a PUT REQUEST and specify
+
+      If-Match - "ETag string"
+
+In case somebody else did update the record after I got the last RowVersion(and I will transmit this info in the header), I will get a "PreconditionFailed" status.
+
+same code for DELETE action
+
+      //LD STEP54
+
+**DELETE CACHE when delete action**, I added it
+
+      //LD STEP55
+
+**TO RESUME GET** 
+
+if in cache == rownumber received 
+	do nothing (mean that nobody updated the specific id)
+  else
+	execute query db + return instance + update cache + return rowversion to client in header
+  
+**TO RESUME PUT** 
+  if ETag received by server != actual in db(query executed)
+	PreconditionFailed (concurrency detected)
+  else
+	update instance + update cache with new rowversion + return New rowversion
+
+Postman GET and PUT calls
+https://localhost:44342/api/camps/ATL2016/speakers/1/talks/1
+
+need to specify in  the header "If-Match", "If-None-Match"
+
+
+### CACHE (definitions)
+
+**Cache definition**: 
+
+the cache is a separate component that 
+
+- accepts requests from the consumer to the API
+- receives responces from the API and stores them if cacheable
+
+To resume is a kind of "middle-man" of request/responce communication between the consuming appication and the API
+
+**Cache types definition**:
+
+- "Client cache"(browser), called private because the resources are not shared with anyone else.
+- "Gateway cache"(server), this is shared
+- "Proxy cache"(network, doesn't live in consumer neither server side), this is shared.
+
+**Server "Expiration Model" definition**:
+
+allows the server to state how long a responce is considered fresh
+-cahce control header, where is possible decide between private and public server memory and expiration time in seconds
+
+**Cache and .net core**
+
+ASP.NET Core supports several different caches. The simplest cache is based on the IMemoryCache, which represents a cache stored in the memory of the web server. 
+
+Apps which run on a server farm of multiple servers should ensure that sessions are sticky when using the in-memory cache. Sticky sessions ensure that subsequent requests from a client all go to the same server. For example, Azure Web apps use Application Request Routing (ARR) to route all subsequent requests to the same server.
+
+Non-sticky sessions in a web farm require a distributed cache to avoid cache consistency problems. For some apps, a distributed cache can support higher scale out than an in-memory cache. Using a distributed cache offloads the cache memory to an external process.
+
+- Strategy to evict items under memory pressure "CacheItemPriority":
+The IMemoryCache cache will evict cache entries under memory pressure unless the cache priority is set to CacheItemPriority.NeverRemove. You can set the CacheItemPriority to adjust the priority the cache evicts items under memory pressure.
+
+- Type of objects for "InMemoryCache":
+The in-memory cache can store any object; the distributed cache interface is limited to byte[].
+
+Example "Delegates" with "MemoryCacheEntryOptions"
+
+      //LD STEP999
+
+Postman call: "https://localhost:44342/api/camps/ATL2016/speakers/1/talks/EvictCache"
+
+**InMemory Cache**
+
+The information is stored in the memory of the server.
+
+  - So we deal with a specific server, then works for "Sticky Sessions", subsequest requests need to be done to the same server.
+  - It will work with any type of objects.
+  - We use the "IMemoryCache" Interface.
+
+- **Cache Tag Helper**
+
+use the same "InMemoryCache" approach but for razor code
+
+      <cacheexpires-after="@TimeSpan.FromSeconds(30)">
+            @await Component.InvokeAsync("CategoryMenu")
+      </cache>
+
+**Distribuited Cache**
+
+DEFINITION:the cache will not be stored in the specific server memory, but in a centralized place. So the cache will be:
+
+- identical and available for all the servers.
+- no sticky sessions required
+- not impacted with server reboots
+
+https://docs.microsoft.com/en-us/aspnet/core/performance/caching/distributed
+
+https://dotnetcoretutorials.com/2017/03/05/using-inmemory-cache-net-core/
+
+**Response Caching**
+https://docs.microsoft.com/en-us/aspnet/core/performance/caching/response
+
+https://www.codeproject.com/Articles/1204097/ASP-NET-Core-Response-Caching
+
+DEFINITION: the responce cache is based on Headers that are included on responce. Based on that the client can cache the entire responce and reuse that. This limit the load of the server. We are able to setup the behaviour of the client by doing setting on server side.
+
+to work with responce cache we have to use the "ResponceCache" attribute.
+
+for instance:
+
+      [ResponseCache(Duration = 30, VaryByHeader = "User-Agent")]
+
+we have available options to specify on headers:
+
+- Location (allows to specify where the cache has to happen: any/client/non)
+- Duration
+- NoStore (cache has to not happen at all)
+- VaryByHeader (allows to specify what header we want to check on)
+
+es:
+
+                  services.AddMvc
+                (
+                    config =>
+                    {
+                        config.Filters.AddService(typeof(TimerAction));
+                        config.CacheProfiles.Add("Default",
+                            new CacheProfile()
+                            {
+                                Duration = 30,
+                                Location = ResponseCacheLocation.Any
+                            });
+                        config.CacheProfiles.Add("None",
+                            new CacheProfile()
+                            {
+                                Location = ResponseCacheLocation.None,
+                                NoStore = true
+                            });
+                    }
+                )      
+
+
+### FILTER test
+
+This topic is not included in the course
+
+I added an "**ActionFilterAttribute**" just for exercise, is possible test it by calling the "TalksController.cs" by postman
+
+      https://localhost:44342/api/camps/ATL2016/speakers/1/talks/1
+
+      //LD STEP004 (multiple times)
+      
+### REST Constraints
+
+List of REST Constraints:
+
+- Client -Server
+- Stateless Server (no state preserved, es session state)
+- Cache
+- Uniform Interface
+- Layered System
+- Code -On-Demand
+
+### CACHE (implementation DistribuitedCache)
+
+1 - install nuget packages: "redis-64"
+
+2 - run "redis-server.exe" in the path "C:\Users\Luca\.nuget\packages\redis-64\3.0.503\tools". So now the distribuited cache is running in local
+
+3 - install nuget "Microsoft.Extensions.Caching.Redis" ver.1.1.0
+
+4 - set startup.cs
+
+      //LD STEPdist1
+
+5 - use distributed cache in the controller
+
+      //LD STEPdist2
+      //LD STEPdist3
+
+6 - I didn't implement the example, it can be followed from here:
+
+      https://app.pluralsight.com/player?course=aspdotnet-core-mvc-enterprise-application&author=gill-cleeren&name=81741cc0-66db-4b7a-a4fe-673f61981301&clip=7&mode=live
