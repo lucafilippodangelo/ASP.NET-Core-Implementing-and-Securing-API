@@ -392,5 +392,27 @@ I can call it by a PUT request like this
       ```
       
 **Delete**
+
 easly implemented. See code example in project.
+
+### Logging
+
++ the LOGGING SYSTEM is INTEGRATED WITH DEPENDENCY INJECTION, in order to use it we have just t say that we waant log for a specific class, in our case we want log in a controller
+
+        ``` 
+        //LD STEP102
+        public CampsController(ICampRepository repo, ILogger<CampsController> logger) //LD STEP102
+        {
+            _repo = repo;
+            _logger = logger;
+        }
+        ```
+        
+then use it in the ACTION
+
+      ``` 
+      //LD STEP103
+      ```
+      
+is possible see the logging in the OUTPUT WINDOW, by selecting DEBUG in the "Show Output Option" combo
 
