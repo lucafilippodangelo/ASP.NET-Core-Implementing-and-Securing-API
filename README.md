@@ -84,4 +84,30 @@ The exercise is based on an ASP.NET CORE MVC project pluralsight course. Main To
 
 Is possible match the code I wrote and the notes by searching for instance "//LD STEP0,//LD STEP1, etc.." 
 
-### Optimizing the Discoverability of Pages Using the Routing Engine
+### HTTP protocol
+
+HTTP work in this way, is a comunication where we have a REQUEST and a responce.
+
+a REQUEST is composed by:
+- VERB --> es. "Post" (is the action) [GET,POST,PUT,PATCH,DELETE]
+- HEADER --> (information about the request)
+- CONTENT
+
+a RESPONCE is composed by:
+- STATUS CODE
+- HEADER
+- CONTENT
+
+all that is STATELESS, the server doesn't keep track of all the requestes.
+
+### REST, Resource Based Architecture
+
+DEFINITION --> "Representational state patttern"
+- separation of client and server
+- server requests are stateless
+- cacheable requests
+
+- is the CONCEPT for which resources are rapresentative of real world entityes, relations are tipically nested
+
+- URI is the path to the resource
+- QUERY STRINGS used in the request to transfer info not related with data elements but with preferences(es. sorting, paging)
